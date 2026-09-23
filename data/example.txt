@@ -1,0 +1,12 @@
+Developer Assistant Agent - Example Data File
+
+This file lives in the project's "data" directory, the only location the
+agent's file reader tool is allowed to access.
+
+Project facts:
+- Language: Python 3.10+
+- Framework: LangChain
+- Tools: calculator, file reader
+- Interface: command-line (CLI)
+
+Try asking the agent: "Read example.txt and tell me which tools the project has."
