@@ -1,1 +1,12 @@
-# Dependencies are pinned in Subtask 2.
+# Core: LangChain primitives (tools, messages, tool-calling) and the OpenAI chat model
+langchain-core==1.6.4
+langchain-openai==1.6.6
+
+# Structured data validation
+pydantic==2.13.5
+
+# Loads secrets from the .env file into environment variables
+python-dotenv==1.2.3
+
+# Testing
+pytest==9.1.1
