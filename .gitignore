@@ -13,6 +13,9 @@ dist/
 # Testing
 .pytest_cache/
 
+# Logs
+*.log
+
 # IDE / OS
 .vscode/
 .idea/
