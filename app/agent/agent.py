@@ -21,6 +21,7 @@ from langchain_core.tools import BaseTool
 from app.models.schemas import AgentResponse
 from app.tools.calculator import calculator
 from app.tools.file_reader import create_file_reader
+from app.tools.skills import DEFAULT_SKILLS_DIR, create_skill_reader, skill_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,11 @@ MAX_ITERATIONS = 6
 
 SYSTEM_PROMPT = """You are a developer assistant.
 Decide for yourself whether a tool is needed.
+If a skill below matches the request, call read_skill for that skill and follow its instructions.
 Use the calculator tool for arithmetic instead of calculating it yourself.
 Use the read_file tool for .txt, .md, and .json files in the data directory.
 Known files include example.txt, notes.md, and numbers.json.
+Do not open a data file to search for numbers the user already gave you.
 If no tool is needed, answer directly.
 After a tool returns, reply to the user in a short sentence.
 """
@@ -38,9 +41,14 @@ After a tool returns, reply to the user in a short sentence.
 ProgressCallback = Callable[[str], None]
 
 
-def build_tools(data_dir: Path) -> list[BaseTool]:
+def build_system_prompt(skills_dir: Path = DEFAULT_SKILLS_DIR) -> str:
+    """Base instructions plus the skill names the model can choose from."""
+    return f"{SYSTEM_PROMPT}\nAvailable skills:\n{skill_catalog(skills_dir)}\n"
+
+
+def build_tools(data_dir: Path, skills_dir: Path = DEFAULT_SKILLS_DIR) -> list[BaseTool]:
     """Return the tools the model is allowed to call."""
-    return [calculator, create_file_reader(data_dir)]
+    return [calculator, create_file_reader(data_dir), create_skill_reader(skills_dir)]
 
 
 def run_agent(
@@ -48,6 +56,7 @@ def run_agent(
     llm: BaseChatModel,
     tools: list[BaseTool],
     history: list[BaseMessage] | None = None,
+    skills_dir: Path = DEFAULT_SKILLS_DIR,
     max_iterations: int = MAX_ITERATIONS,
     on_progress: ProgressCallback | None = None,
 ) -> AgentResponse:
@@ -57,7 +66,7 @@ def run_agent(
     """
     messages = history if history is not None else []
     if not any(isinstance(message, SystemMessage) for message in messages):
-        messages.insert(0, SystemMessage(content=SYSTEM_PROMPT))
+        messages.insert(0, SystemMessage(content=build_system_prompt(skills_dir)))
     messages.append(HumanMessage(content=user_message))
 
     model = llm.bind_tools(tools)
@@ -133,6 +142,9 @@ def _progress_line(name: str, arguments: object) -> str:
         return f"Reading {filename}..."
     if name == "calculator":
         return "Using calculator..."
+    if name == "read_skill":
+        skill_name = details.get("skill_name", "a skill")
+        return f"Using skill {skill_name}..."
     return f"Using {name}..."
 
 
