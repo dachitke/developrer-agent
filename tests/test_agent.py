@@ -4,7 +4,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from langchain_core.messages import AIMessage
 from langchain_core.tools import BaseTool
 
-from app.agent.agent import _read_tool_call, build_tools, run_agent
+from app.agent.agent import _read_tool_call, build_system_prompt, build_tools, run_agent
 from app.config import PROJECT_ROOT
 
 
@@ -186,6 +186,62 @@ def test_model_failure_becomes_a_friendly_response() -> None:
     assert response.success is False
     assert response.error == "language model request failed"
     assert "API key" in response.answer
+
+
+def test_system_prompt_lists_installed_skills() -> None:
+    prompt = build_system_prompt(PROJECT_ROOT / "skills")
+
+    assert "quadratic-equation:" in prompt
+    assert "read_skill" in prompt
+
+
+def test_agent_reads_a_file_then_uses_the_calculator() -> None:
+    llm = _scripted(
+        _call("read_file", {"filename": "numbers.json"}, "call_1"),
+        _call("calculator", {"expression": "10 + 20 + 30 + 40 + 50"}, "call_2"),
+        AIMessage(content="The values add up to 150."),
+    )
+
+    response = run_agent("Add the values in numbers.json", llm, build_tools(PROJECT_ROOT / "data"))
+
+    assert response.tools_used == ["read_file", "calculator"]
+    assert response.tool_calls == 2
+    assert "150" in response.answer
+
+
+def test_agent_reads_a_skill_before_calculating() -> None:
+    llm = _scripted(
+        _call("read_skill", {"skill_name": "quadratic-equation"}, "call_1"),
+        _call("calculator", {"expression": "20 ** 2 - 4 * 1 * 30"}, "call_2"),
+        AIMessage(content="The discriminant is 280."),
+    )
+    progress: list[str] = []
+
+    response = run_agent(
+        "What are the roots when a=1, b=20 and c=30?",
+        llm,
+        build_tools(PROJECT_ROOT / "data"),
+        on_progress=progress.append,
+    )
+
+    assert response.tools_used == ["read_skill", "calculator"]
+    assert progress[0] == "Using skill quadratic-equation..."
+    assert "280" in response.answer
+
+
+def test_iteration_limit_stops_repeated_tool_calls() -> None:
+    llm = _scripted(_call("read_file", {"filename": "example.txt"}))
+
+    response = run_agent(
+        "Keep reading",
+        llm,
+        build_tools(PROJECT_ROOT / "data"),
+        max_iterations=2,
+    )
+
+    assert response.success is False
+    assert response.error == "stopped after 2 steps"
+    assert "too many steps" in response.answer
 
 
 def test_malformed_tool_call_is_turned_into_an_error_observation() -> None:
