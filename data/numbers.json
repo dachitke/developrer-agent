@@ -1,0 +1,4 @@
+{
+  "description": "Sample numbers the agent can add up with the calculator.",
+  "values": [10, 20, 30, 40, 50]
+}
