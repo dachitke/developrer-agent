@@ -4,7 +4,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from langchain_core.messages import AIMessage
 from langchain_core.tools import BaseTool
 
-from app.agent.agent import build_tools, run_agent
+from app.agent.agent import _read_tool_call, build_tools, run_agent
 from app.config import PROJECT_ROOT
 
 
@@ -95,3 +95,102 @@ def test_agent_reads_a_file_when_the_model_selects_that_tool() -> None:
     assert response.tools_used == ["read_file"]
     assert progress == ["Reading numbers.json..."]
     assert "50" in response.answer
+
+
+def _scripted(*responses: AIMessage) -> ScriptedToolModel:
+    return ScriptedToolModel(responses=list(responses))
+
+
+def _call(name: str, args: object, call_id: str = "call_1") -> AIMessage:
+    return AIMessage(
+        content="",
+        tool_calls=[{"name": name, "args": args, "id": call_id, "type": "tool_call"}],
+    )
+
+
+def test_calculator_error_is_explained_instead_of_crashing() -> None:
+    llm = _scripted(
+        _call("calculator", {"expression": "10 / 0"}),
+        AIMessage(content="I couldn't calculate that because it divides by zero."),
+    )
+
+    response = run_agent("What is 10 / 0?", llm, build_tools(PROJECT_ROOT / "data"))
+
+    assert response.success is True
+    assert "zero" in response.answer
+
+
+def test_missing_file_is_explained_instead_of_crashing() -> None:
+    llm = _scripted(
+        _call("read_file", {"filename": "missing.txt"}),
+        AIMessage(content="I couldn't read that file because it does not exist."),
+    )
+
+    response = run_agent("Read missing.txt", llm, build_tools(PROJECT_ROOT / "data"))
+
+    assert response.success is True
+    assert "does not exist" in response.answer
+
+
+def test_invalid_tool_arguments_do_not_crash() -> None:
+    llm = _scripted(
+        _call("calculator", {"expression": 10}),
+        AIMessage(content="I couldn't run the calculator because the expression was not text."),
+    )
+
+    response = run_agent("Calculate", llm, build_tools(PROJECT_ROOT / "data"))
+
+    assert response.success is True
+    assert "expression" in response.answer
+
+
+def test_unknown_tool_name_does_not_crash() -> None:
+    llm = _scripted(
+        _call("web_search", {"query": "langchain"}),
+        AIMessage(content="I don't have a web search tool."),
+    )
+
+    response = run_agent("Search the web", llm, build_tools(PROJECT_ROOT / "data"))
+
+    assert response.success is True
+    assert response.tools_used == ["web_search"]
+    assert "web search" in response.answer
+
+
+def test_unexpected_tool_exception_does_not_crash() -> None:
+    from langchain_core.tools import tool
+
+    @tool
+    def explode(value: str) -> str:
+        """A tool that always fails."""
+        raise RuntimeError("disk on fire")
+
+    llm = _scripted(
+        _call("explode", {"value": "x"}),
+        AIMessage(content="That tool failed, so I could not finish the request."),
+    )
+
+    response = run_agent("Use the broken tool", llm, [explode])
+
+    assert response.success is True
+    assert "failed" in response.answer
+
+
+def test_model_failure_becomes_a_friendly_response() -> None:
+    class BrokenModel(ScriptedToolModel):
+        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+            raise RuntimeError("connection reset")
+
+    response = run_agent("Hello", BrokenModel(responses=[]), build_tools(PROJECT_ROOT / "data"))
+
+    assert response.success is False
+    assert response.error == "language model request failed"
+    assert "API key" in response.answer
+
+
+def test_malformed_tool_call_is_turned_into_an_error_observation() -> None:
+    name, arguments, call_id = _read_tool_call({"args": {}, "id": "bad"})
+
+    assert name == "unknown"
+    assert arguments == {}
+    assert call_id == "malformed"
