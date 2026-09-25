@@ -31,6 +31,7 @@ def test_cli_prints_the_answer_and_exits(capsys, monkeypatch) -> None:
 
     assert "Developer Assistant Agent" in output
     assert "Agent: 25" in output
+    assert "Tools used: calculator" in output
     assert "Goodbye!" in output
 
 

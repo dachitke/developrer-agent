@@ -62,6 +62,8 @@ def main() -> None:
             continue
 
         print(f"Agent: {response.answer}")
+        if response.tools_used:
+            print(f"Tools used: {', '.join(response.tools_used)}")
 
 
 if __name__ == "__main__":
