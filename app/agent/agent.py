@@ -65,7 +65,20 @@ def run_agent(
     tools_used: list[str] = []
 
     for _ in range(max_iterations):
-        ai_message = model.invoke(messages)
+        try:
+            ai_message = model.invoke(messages)
+        except Exception:
+            logger.exception("Language model request failed")
+            return AgentResponse(
+                answer=(
+                    "I could not reach the language model. "
+                    "Check your connection and API key, then try again."
+                ),
+                tools_used=tools_used,
+                tool_calls=len(tools_used),
+                success=False,
+                error="language model request failed",
+            )
         messages.append(ai_message)
         tool_calls = ai_message.tool_calls
         if not tool_calls:
@@ -77,15 +90,12 @@ def run_agent(
             )
 
         for call in tool_calls:
-            name = call["name"]
-            arguments = call.get("args") or {}
+            name, arguments, call_id = _read_tool_call(call)
             _report(on_progress, _progress_line(name, arguments))
             observation = _run_tool(tools_by_name.get(name), arguments)
             tools_used.append(name)
             logger.info("Tool %s returned: %s", name, observation)
-            messages.append(
-                ToolMessage(content=observation, tool_call_id=call["id"])
-            )
+            messages.append(ToolMessage(content=observation, tool_call_id=call_id))
 
     logger.warning("Stopped after %s tool-calling steps", max_iterations)
     return AgentResponse(
@@ -97,16 +107,29 @@ def run_agent(
     )
 
 
-def _run_tool(tool: BaseTool | None, arguments: dict) -> str:
+def _read_tool_call(call: object) -> tuple[str, object, str]:
+    if not isinstance(call, dict) or not call.get("name"):
+        logger.error("Malformed tool call: %r", call)
+        return "unknown", {}, "malformed"
+    return str(call["name"]), call.get("args") or {}, str(call.get("id") or "missing")
+
+
+def _run_tool(tool: BaseTool | None, arguments: object) -> str:
     if tool is None:
         return "Error: that tool is not available."
-    result = tool.invoke(arguments)
-    return str(result)
+    if not isinstance(arguments, dict):
+        return "Error: the tool arguments were not valid."
+    try:
+        return str(tool.invoke(arguments))
+    except Exception:
+        logger.exception("Tool %s failed", tool.name)
+        return f"Error: the {tool.name} tool could not complete that request."
 
 
-def _progress_line(name: str, arguments: dict) -> str:
+def _progress_line(name: str, arguments: object) -> str:
+    details = arguments if isinstance(arguments, dict) else {}
     if name == "read_file":
-        filename = arguments.get("filename", "a file")
+        filename = details.get("filename", "a file")
         return f"Reading {filename}..."
     if name == "calculator":
         return "Using calculator..."
