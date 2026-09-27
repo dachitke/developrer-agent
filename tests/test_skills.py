@@ -77,6 +77,32 @@ def test_tool_exposes_name_and_argument_to_the_llm(skills_dir: Path) -> None:
     assert list(reader.args) == ["skill_name"]
 
 
+def test_catalog_uses_the_folder_name_not_a_different_title(skills_dir: Path) -> None:
+    write_skill(skills_dir, "real-folder", "Do this task.", "Steps.")
+    skill_file = skills_dir / "real-folder" / "SKILL.md"
+    text = skill_file.read_text(encoding="utf-8").replace("name: real-folder", "name: other-title")
+    skill_file.write_text(text, encoding="utf-8")
+
+    names = [skill.name for skill in list_skills(skills_dir)]
+
+    assert "real-folder" in names
+    assert "other-title" not in names
+
+
+def test_symlink_skill_outside_the_folder_is_not_listed(skills_dir: Path, tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    write_skill(outside.parent, "outside", "Secret skill.", "Do not list this.")
+    link = skills_dir / "linked-skill"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("this system does not allow creating symlinks")
+
+    names = [skill.name for skill in list_skills(skills_dir)]
+
+    assert "linked-skill" not in names
+
+
 def test_project_skills_can_be_read() -> None:
     catalog = skill_catalog(PROJECT_ROOT / "skills")
     quadratic = read_skill_text("quadratic-equation", PROJECT_ROOT / "skills")

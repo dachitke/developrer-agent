@@ -69,8 +69,13 @@ def list_skills(skills_dir: Path) -> list[SkillInfo]:
         skill_file = path / "SKILL.md"
         if not path.is_dir() or not skill_file.is_file():
             continue
-        name, description = _name_and_description(skill_file.read_text(encoding="utf-8"), path.name)
-        skills.append(SkillInfo(name=name, description=description))
+        # The tool opens skills/<folder>/SKILL.md, so the catalog must use the
+        # folder name. A symlink that points outside the skills directory is skipped.
+        if not skill_file.resolve().is_relative_to(root.resolve()):
+            logger.warning("Skipping skill outside the skills directory: %s", path.name)
+            continue
+        description = _description(skill_file.read_text(encoding="utf-8"))
+        skills.append(SkillInfo(name=path.name, description=description))
     return skills
 
 
@@ -115,11 +120,9 @@ def read_skill_text(skill_name: str, skills_dir: Path) -> str:
     return content
 
 
-def _name_and_description(text: str, folder_name: str) -> tuple[str, str]:
+def _description(text: str) -> str:
     metadata, _body = _split_frontmatter(text)
-    name = metadata.get("name") or folder_name
-    description = metadata.get("description") or "No description provided."
-    return name, description
+    return metadata.get("description") or "No description provided."
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
