@@ -200,3 +200,5 @@ requirements.txt          pinned packages
 - A third provider, or a local model, behind the same `create_llm` function
 - More skills, still as folders rather than new Python tools
 - A `--verbose` flag that prints the full `AgentResponse` for debugging
+
+The requirement checklist, five presentation prompts, and a short spoken explanation are in `SUBMISSION.md`.
