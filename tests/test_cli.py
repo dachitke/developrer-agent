@@ -1,7 +1,7 @@
 """Tests for the interactive CLI. The language model is not called."""
 
 from app.config import PROJECT_ROOT, ConfigError, Settings
-from app.main import main
+from app.main import format_tools_used, main
 from app.models.schemas import AgentResponse
 
 
@@ -12,6 +12,12 @@ def _settings() -> Settings:
         temperature=0,
         data_dir=PROJECT_ROOT / "data",
         log_level="INFO",
+    )
+
+
+def test_repeated_tools_are_shown_once_with_a_count() -> None:
+    assert format_tools_used(["read_skill", "calculator", "calculator", "calculator"]) == (
+        "read_skill, calculator X3"
     )
 
 

@@ -21,6 +21,19 @@ Type your request or 'exit' to quit.
 """
 
 
+def format_tools_used(tools_used: list[str]) -> str:
+    """Show each tool once. A repeated tool is written as 'calculator X3'."""
+    counts: dict[str, int] = {}
+    order: list[str] = []
+    for name in tools_used:
+        if name not in counts:
+            order.append(name)
+            counts[name] = 0
+        counts[name] += 1
+    parts = [name if counts[name] == 1 else f"{name} X{counts[name]}" for name in order]
+    return ", ".join(parts)
+
+
 def main() -> None:
     """Load settings, then accept requests until the user exits."""
     try:
@@ -63,7 +76,7 @@ def main() -> None:
 
         print(f"Agent: {response.answer}")
         if response.tools_used:
-            print(f"Tools used: {', '.join(response.tools_used)}")
+            print(f"Tools used: {format_tools_used(response.tools_used)}")
 
 
 if __name__ == "__main__":
