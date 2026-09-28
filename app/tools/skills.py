@@ -59,7 +59,12 @@ def create_skill_reader(skills_dir: Path) -> BaseTool:
 
 
 def list_skills(skills_dir: Path) -> list[SkillInfo]:
-    """Return the name and description of every skill in the folder."""
+    """Return the folder name and description of every readable skill.
+
+    The folder name is used because read_skill opens skills/<folder>/SKILL.md.
+    Skills that point outside the folder or cannot be read are skipped, so one
+    broken file does not stop the agent from answering.
+    """
     root = Path(skills_dir)
     if not root.is_dir():
         return []
@@ -69,13 +74,15 @@ def list_skills(skills_dir: Path) -> list[SkillInfo]:
         skill_file = path / "SKILL.md"
         if not path.is_dir() or not skill_file.is_file():
             continue
-        # The tool opens skills/<folder>/SKILL.md, so the catalog must use the
-        # folder name. A symlink that points outside the skills directory is skipped.
         if not skill_file.resolve().is_relative_to(root.resolve()):
             logger.warning("Skipping skill outside the skills directory: %s", path.name)
             continue
-        description = _description(skill_file.read_text(encoding="utf-8"))
-        skills.append(SkillInfo(name=path.name, description=description))
+        try:
+            text = skill_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            logger.warning("Skipping unreadable skill: %s", path.name, exc_info=True)
+            continue
+        skills.append(SkillInfo(name=path.name, description=_description(text)))
     return skills
 
 
@@ -121,11 +128,13 @@ def read_skill_text(skill_name: str, skills_dir: Path) -> str:
 
 
 def _description(text: str) -> str:
+    """Return the description line from a SKILL.md header."""
     metadata, _body = _split_frontmatter(text)
     return metadata.get("description") or "No description provided."
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    """Split the '---' header block from the rest of a SKILL.md file."""
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}, text.strip()

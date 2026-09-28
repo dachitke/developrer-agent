@@ -11,13 +11,10 @@ from pathlib import Path
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, Field
 
-from app.config import PROJECT_ROOT
-
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = frozenset({".txt", ".md", ".json"})
 MAX_FILE_CHARS = 8_000
-DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
 
 
 class FileReaderError(ValueError):
@@ -55,12 +52,11 @@ def create_file_reader(data_dir: Path) -> BaseTool:
     return read_file
 
 
-file_reader = create_file_reader(DEFAULT_DATA_DIR)
-
-
 def read_data_file(filename: str, data_dir: Path) -> str:
     """Read one allowed file from data_dir.
 
+    Backslashes are treated as folder separators on every operating system,
+    so '..\\secret.txt' is rejected on macOS and Linux as well as Windows.
     Raises FileReaderError for empty names, unsafe paths, unsupported types,
     missing files, permission problems and files that are not UTF-8 text.
     """
@@ -68,7 +64,7 @@ def read_data_file(filename: str, data_dir: Path) -> str:
     if not filename:
         raise FileReaderError("filename is empty")
 
-    requested = Path(filename)
+    requested = Path(filename.replace("\\", "/"))
     if requested.is_absolute():
         raise FileReaderError("absolute paths are not allowed")
     if ".." in requested.parts:

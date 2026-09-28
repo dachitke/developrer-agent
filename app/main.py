@@ -35,7 +35,11 @@ def format_tools_used(tools_used: list[str]) -> str:
 
 
 def main() -> None:
-    """Load settings, then accept requests until the user exits."""
+    """Load settings, then accept requests until the user exits.
+
+    A failed or cancelled request is removed from the conversation history,
+    so a broken exchange cannot make later requests fail too.
+    """
     try:
         settings = load_settings()
     except ConfigError as exc:
@@ -61,6 +65,7 @@ def main() -> None:
             print("Goodbye!")
             return
 
+        start = len(history)
         try:
             response = run_agent(
                 user_text,
@@ -69,11 +74,18 @@ def main() -> None:
                 history=history,
                 on_progress=lambda line: print(f"  {line}"),
             )
+        except KeyboardInterrupt:
+            del history[start:]
+            print("\nAgent: Request cancelled.")
+            continue
         except Exception:
+            del history[start:]
             logger.exception("Unexpected agent failure")
             print("Agent: Something went wrong. Please try another request.")
             continue
 
+        if not response.success:
+            del history[start:]
         print(f"Agent: {response.answer}")
         if response.tools_used:
             print(f"Tools used: {format_tools_used(response.tools_used)}")

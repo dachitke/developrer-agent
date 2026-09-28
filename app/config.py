@@ -49,8 +49,7 @@ class Settings(BaseModel):
     @field_validator("data_dir")
     @classmethod
     def resolve_data_dir(cls, value: Path) -> Path:
-        # Relative paths are anchored to the project root, not the current
-        # working directory, so the app behaves the same wherever it is run from.
+        """Resolve a relative path from the project root and require that it exists."""
         path = value if value.is_absolute() else PROJECT_ROOT / value
         path = path.resolve()
         if not path.is_dir():
@@ -60,6 +59,7 @@ class Settings(BaseModel):
     @field_validator("log_level")
     @classmethod
     def normalize_log_level(cls, value: str) -> str:
+        """Accept a standard logging level name in any letter case."""
         level = value.upper()
         if level not in VALID_LOG_LEVELS:
             raise ValueError(f"must be one of {', '.join(VALID_LOG_LEVELS)}")
@@ -97,14 +97,17 @@ def load_settings(env_file: Path | None = ENV_FILE) -> Settings:
 
 
 def setup_logging(level: str, log_file: Path = LOG_FILE) -> None:
-    """Write log records to a file so technical details never clutter the CLI."""
+    """Write log records to a file so technical details never clutter the CLI.
+
+    The HTTP client libraries are limited to warnings, because they otherwise
+    log every request at INFO level.
+    """
     logging.basicConfig(
         filename=log_file,
         encoding="utf-8",
         level=level,
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
     )
-    # These libraries log every HTTP request at INFO level, which is noise here.
     for noisy_logger in ("httpx", "httpcore", "openai"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 

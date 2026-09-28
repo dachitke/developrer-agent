@@ -116,14 +116,15 @@ def _evaluate_node(node: ast.expr) -> Number:
 
 
 def _evaluate_constant(node: ast.Constant) -> Number:
+    """Accept int and float literals. True and False are rejected even though bool is an int."""
     value = node.value
-    # bool is a subclass of int in Python, so True/False must be excluded explicitly.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise _unsupported(node)
     return value
 
 
 def _evaluate_unary(node: ast.UnaryOp) -> Number:
+    """Apply unary plus or minus."""
     operation = UNARY_OPERATORS.get(type(node.op))
     if operation is None:
         raise _unsupported(node)
@@ -131,19 +132,19 @@ def _evaluate_unary(node: ast.UnaryOp) -> Number:
 
 
 def _evaluate_binary(node: ast.BinOp) -> Number:
+    """Apply an allowed operator. Large exponents are refused so 9 ** 9 ** 9 cannot freeze the program."""
     operation = BINARY_OPERATORS.get(type(node.op))
     if operation is None:
         raise _unsupported(node)
     left = _evaluate_node(node.left)
     right = _evaluate_node(node.right)
-    # Without this limit, an input such as 9 ** 9 ** 9 would freeze the program.
     if isinstance(node.op, ast.Pow) and abs(right) > MAX_EXPONENT:
         raise CalculatorError(f"exponent is too large (maximum is {MAX_EXPONENT})")
     return operation(left, right)
 
 
 def _check_result(value: Number | complex) -> Number:
-    # A negative number raised to a fractional power, e.g. (-8) ** (1/3), is complex.
+    """Reject complex results, such as (-8) ** (1/3), and numbers above MAX_MAGNITUDE."""
     if isinstance(value, complex):
         raise CalculatorError("result is not a real number")
     if abs(value) > MAX_MAGNITUDE:
@@ -152,6 +153,7 @@ def _check_result(value: Number | complex) -> Number:
 
 
 def _unsupported(node: ast.AST) -> CalculatorError:
+    """Build the error for syntax the calculator does not allow."""
     return CalculatorError(
         f"unsupported element: {ast.unparse(node)} (only {ALLOWED_SYNTAX} are allowed)"
     )
