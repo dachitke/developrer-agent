@@ -1,5 +1,7 @@
 """Tests for the interactive CLI. The language model is not called."""
 
+from langchain_core.messages import HumanMessage
+
 from app.config import PROJECT_ROOT, ConfigError, Settings
 from app.main import format_tools_used, main
 from app.models.schemas import AgentResponse
@@ -59,6 +61,48 @@ def test_cli_survives_a_failed_request(capsys, monkeypatch) -> None:
     assert "Something went wrong" in output
     assert "Goodbye!" in output
     assert "Traceback" not in output
+
+
+def test_ctrl_c_during_a_request_cancels_it_and_keeps_the_cli_open(capsys, monkeypatch) -> None:
+    replies = iter(["What is 2 + 2?", "exit"])
+
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("app.main.load_settings", _settings)
+    monkeypatch.setattr("app.main.create_llm", lambda settings: object())
+    monkeypatch.setattr("app.main.setup_logging", lambda level: None)
+    monkeypatch.setattr("app.main.run_agent", interrupted)
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(replies))
+
+    main()
+    output = capsys.readouterr().out
+
+    assert "Request cancelled." in output
+    assert "Goodbye!" in output
+    assert "Traceback" not in output
+
+
+def test_failed_request_is_removed_from_history(capsys, monkeypatch) -> None:
+    replies = iter(["first", "second", "exit"])
+    history_lengths: list[int] = []
+
+    def fake_agent(user_text, llm, tools, history, on_progress):
+        history_lengths.append(len(history))
+        history.append(HumanMessage(content=user_text))
+        if user_text == "first":
+            return AgentResponse(answer="API down", success=False, error="language model request failed")
+        return AgentResponse(answer="ok")
+
+    monkeypatch.setattr("app.main.load_settings", _settings)
+    monkeypatch.setattr("app.main.create_llm", lambda settings: object())
+    monkeypatch.setattr("app.main.setup_logging", lambda level: None)
+    monkeypatch.setattr("app.main.run_agent", fake_agent)
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(replies))
+
+    main()
+
+    assert history_lengths == [0, 0]
 
 
 def test_cli_reports_a_missing_api_key(capsys, monkeypatch) -> None:

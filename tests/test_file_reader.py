@@ -6,12 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.config import PROJECT_ROOT
-from app.tools.file_reader import (
-    FileReaderError,
-    create_file_reader,
-    file_reader,
-    read_data_file,
-)
+from app.tools.file_reader import FileReaderError, create_file_reader, read_data_file
 
 
 def write_file(directory: Path, name: str, content: str) -> Path:
@@ -168,6 +163,7 @@ def test_tool_exposes_name_description_and_argument_to_the_llm(data_dir: Path) -
 
 
 def test_project_sample_files_can_be_read() -> None:
+    file_reader = create_file_reader(PROJECT_ROOT / "data")
     text = file_reader.invoke({"filename": "example.txt"})
     notes = file_reader.invoke({"filename": "notes.md"})
     numbers = json.loads(file_reader.invoke({"filename": "numbers.json"}))

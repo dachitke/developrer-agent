@@ -19,3 +19,5 @@ def test_create_llm_uses_settings_and_does_not_call_the_api() -> None:
     assert llm.temperature == 0
     assert llm.openai_api_key is not None
     assert llm.openai_api_key.get_secret_value() == "sk-test"
+    assert llm.request_timeout == 30
+    assert llm.max_retries == 2

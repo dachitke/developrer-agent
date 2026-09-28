@@ -103,6 +103,16 @@ def test_symlink_skill_outside_the_folder_is_not_listed(skills_dir: Path, tmp_pa
     assert "linked-skill" not in names
 
 
+def test_unreadable_skill_is_skipped_instead_of_breaking_the_catalog(skills_dir: Path) -> None:
+    broken = skills_dir / "broken-skill"
+    broken.mkdir()
+    (broken / "SKILL.md").write_bytes(b"\xff\xfe not utf-8")
+
+    names = [skill.name for skill in list_skills(skills_dir)]
+
+    assert names == ["quadratic-equation"]
+
+
 def test_project_skills_can_be_read() -> None:
     catalog = skill_catalog(PROJECT_ROOT / "skills")
     quadratic = read_skill_text("quadratic-equation", PROJECT_ROOT / "skills")
